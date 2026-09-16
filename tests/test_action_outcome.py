@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -26,7 +26,7 @@ def test_action_outcome_accepts_valid_final_state() -> None:
         resolved_by="deterministic-outcome-resolver",
         trace=make_trace(),
         reason="Execution succeeded and external effect was verified.",
-        resolved_at=datetime.now(timezone.utc),
+        resolved_at=datetime.now(UTC),
     )
 
     assert outcome.state is ResultState.SUCCESS
