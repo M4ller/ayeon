@@ -107,3 +107,39 @@ def test_handoff_delegates_each_action_to_executive() -> None:
     handoff.prepare_authorization_requests(output)
 
     assert executive.received_actions == [first, second]
+
+
+def test_handoff_preserves_cognitive_trace_correlation() -> None:
+    trace = TraceContext.root()
+    action = make_action(
+        trace=trace,
+        action_type="test.correlated",
+    )
+    output = CognitiveOutput(
+        trace=trace,
+        action_intents=(action,),
+    )
+    handoff = CognitiveActionHandoff(executive=Executive())
+
+    requests = handoff.prepare_authorization_requests(output)
+
+    assert requests[0].trace.correlation_id == output.trace.correlation_id
+    assert requests[0].action.trace.correlation_id == output.trace.correlation_id
+
+
+def test_handoff_preserves_action_identity() -> None:
+    trace = TraceContext.root()
+    action = make_action(
+        trace=trace,
+        action_type="test.identity",
+    )
+    output = CognitiveOutput(
+        trace=trace,
+        action_intents=(action,),
+    )
+    handoff = CognitiveActionHandoff(executive=Executive())
+
+    requests = handoff.prepare_authorization_requests(output)
+
+    assert requests[0].action is action
+    assert requests[0].action.action_id == action.action_id
