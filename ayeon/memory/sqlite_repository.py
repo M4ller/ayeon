@@ -29,6 +29,24 @@ class SQLiteMemoryRepository:
 
     def _initialize_schema(self) -> None:
         with self._connect() as connection:
+            journal_mode = connection.execute(
+                "PRAGMA journal_mode = DELETE"
+            ).fetchone()[0]
+
+            if journal_mode.lower() != "delete":
+                raise RuntimeError(
+                    "SQLite journal_mode DELETE could not be enforced."
+                )
+
+            schema_version = connection.execute(
+                "PRAGMA user_version"
+            ).fetchone()[0]
+
+            if schema_version not in (0, 1):
+                raise RuntimeError(
+                    f"Unsupported SQLite schema version: {schema_version}."
+                )
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_records (
@@ -37,6 +55,9 @@ class SQLiteMemoryRepository:
                 )
                 """
             )
+
+            if schema_version == 0:
+                connection.execute("PRAGMA user_version = 1")
 
     def store(self, record: MemoryRecord) -> MemoryPersistenceResult:
         """Persist one record with identity-safe idempotency."""

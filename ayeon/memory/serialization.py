@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 
 from ayeon.contracts.memory import MemoryRecord
 
@@ -25,10 +25,7 @@ def _validate_memory_value(value: object) -> None:
             _validate_memory_value(nested_value)
         return
 
-    if isinstance(value, Sequence) and not isinstance(
-        value,
-        str | bytes | bytearray,
-    ):
+    if isinstance(value, list):
         for nested_value in value:
             _validate_memory_value(nested_value)
         return

@@ -148,3 +148,98 @@ def test_sqlite_repository_connect_enforces_full_synchronous(
         ).fetchone()[0]
 
     assert synchronous == 2
+
+def test_sqlite_repository_uses_delete_journal_mode(tmp_path) -> None:
+    database_path = tmp_path / "memory.db"
+
+    SQLiteMemoryRepository(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        journal_mode = connection.execute(
+            "PRAGMA journal_mode"
+        ).fetchone()[0]
+
+    assert journal_mode == "delete"
+
+def test_sqlite_repository_enforces_delete_journal_mode(tmp_path) -> None:
+    database_path = tmp_path / "memory.db"
+
+    with sqlite3.connect(database_path) as connection:
+        configured_mode = connection.execute(
+            "PRAGMA journal_mode = WAL"
+        ).fetchone()[0]
+
+    assert configured_mode == "wal"
+
+    SQLiteMemoryRepository(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        journal_mode = connection.execute(
+            "PRAGMA journal_mode"
+        ).fetchone()[0]
+
+    assert journal_mode == "delete"
+
+def test_sqlite_repository_initializes_schema_version_one(tmp_path) -> None:
+    database_path = tmp_path / "memory.db"
+
+    SQLiteMemoryRepository(database_path)
+
+    with sqlite3.connect(database_path) as connection:
+        schema_version = connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0]
+
+    assert schema_version == 1
+
+def test_sqlite_repository_rejects_unknown_future_schema_version(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "memory.db"
+
+    with sqlite3.connect(database_path) as connection:
+        connection.execute("PRAGMA user_version = 2")
+
+    try:
+        SQLiteMemoryRepository(database_path)
+    except RuntimeError as error:
+        assert str(error) == "Unsupported SQLite schema version: 2."
+    else:
+        raise AssertionError(
+            "Repository accepted an unsupported schema version."
+        )
+
+    with sqlite3.connect(database_path) as connection:
+        schema_version = connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0]
+
+    assert schema_version == 2
+
+def test_sqlite_repository_reopens_version_one_without_losing_data(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "memory.db"
+    record = make_record()
+
+    first_repository = SQLiteMemoryRepository(database_path)
+    stored = first_repository.store(record)
+
+    assert stored.state is ResultState.SUCCESS
+
+    reopened_repository = SQLiteMemoryRepository(database_path)
+    repeated = reopened_repository.store(record)
+
+    assert repeated.state is ResultState.SUCCESS
+    assert "already stored identically" in repeated.summary
+
+    with sqlite3.connect(database_path) as connection:
+        schema_version = connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0]
+        row_count = connection.execute(
+            "SELECT COUNT(*) FROM memory_records"
+        ).fetchone()[0]
+
+    assert schema_version == 1
+    assert row_count == 1

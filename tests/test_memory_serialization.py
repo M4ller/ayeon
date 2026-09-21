@@ -108,3 +108,19 @@ def test_decode_memory_content_rejects_non_finite_floats(
         match="invalid encoded memory content",
     ):
         decode_memory_content(encoded)
+
+def test_encode_memory_content_rejects_tuple_values() -> None:
+    content = {
+        "coordinates": (1, 2),
+    }
+
+    try:
+        encode_memory_content(content)
+    except TypeError as error:
+        assert str(error) == (
+            "memory content contains unsupported value: tuple"
+        )
+    else:
+        raise AssertionError(
+            "Tuple value was silently accepted as JSON array."
+        )
