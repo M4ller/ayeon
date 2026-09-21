@@ -17,6 +17,7 @@ ActionId = NewType("ActionId", UUID)
 AttemptId = NewType("AttemptId", UUID)
 SessionId = NewType("SessionId", UUID)
 MemoryIntentId = NewType("MemoryIntentId", UUID)
+MemoryRecordId = NewType("MemoryRecordId", UUID)
 
 
 def utc_now() -> datetime:
@@ -54,6 +55,10 @@ def new_session_id() -> SessionId:
 
 def new_memory_intent_id() -> MemoryIntentId:
     return MemoryIntentId(uuid4())
+
+
+def new_memory_record_id() -> MemoryRecordId:
+    return MemoryRecordId(uuid4())
 
 
 class ResultState(StrEnum):
