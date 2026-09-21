@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from ayeon.contracts.actions import ActionIntent
 from ayeon.contracts.common import TraceContext
@@ -35,3 +36,38 @@ class CognitiveOutput:
                 raise ValueError(
                     "action intent must share CognitiveOutput correlation_id"
                 )
+
+        safe_memory_intents = tuple(
+            MappingProxyType(dict(intent))
+            for intent in self.memory_intents
+        )
+        safe_emotional_update = MappingProxyType(
+            dict(self.emotional_update)
+        )
+        safe_attention_update = MappingProxyType(
+            dict(self.attention_update)
+        )
+        safe_avatar_state = MappingProxyType(
+            dict(self.avatar_state)
+        )
+
+        object.__setattr__(
+            self,
+            "memory_intents",
+            safe_memory_intents,
+        )
+        object.__setattr__(
+            self,
+            "emotional_update",
+            safe_emotional_update,
+        )
+        object.__setattr__(
+            self,
+            "attention_update",
+            safe_attention_update,
+        )
+        object.__setattr__(
+            self,
+            "avatar_state",
+            safe_avatar_state,
+        )
