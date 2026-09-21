@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 from ayeon.contracts.actions import ActionIntent
 from ayeon.contracts.common import TraceContext
+from ayeon.contracts.memory import MemoryIntent
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +22,7 @@ class CognitiveOutput:
     trace: TraceContext
     spoken_response: str | None = None
     action_intents: tuple[ActionIntent, ...] = ()
-    memory_intents: tuple[Mapping[str, object], ...] = ()
+    memory_intents: tuple[MemoryIntent, ...] = ()
     emotional_update: Mapping[str, object] = field(default_factory=dict)
     attention_update: Mapping[str, object] = field(default_factory=dict)
     executive_signals: tuple[str, ...] = ()
@@ -37,10 +38,16 @@ class CognitiveOutput:
                     "action intent must share CognitiveOutput correlation_id"
                 )
 
-        safe_memory_intents = tuple(
-            MappingProxyType(dict(intent))
-            for intent in self.memory_intents
-        )
+        for intent in self.memory_intents:
+            if not isinstance(intent, MemoryIntent):
+                raise TypeError(
+                    "memory_intents must contain only MemoryIntent"
+                )
+
+            if intent.trace.correlation_id != self.trace.correlation_id:
+                raise ValueError(
+                    "memory intent must share CognitiveOutput correlation_id"
+                )
         safe_emotional_update = MappingProxyType(
             dict(self.emotional_update)
         )
@@ -51,11 +58,6 @@ class CognitiveOutput:
             dict(self.avatar_state)
         )
 
-        object.__setattr__(
-            self,
-            "memory_intents",
-            safe_memory_intents,
-        )
         object.__setattr__(
             self,
             "emotional_update",

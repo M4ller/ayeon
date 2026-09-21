@@ -75,11 +75,9 @@ def test_cognitive_output_copies_mutable_mapping_inputs() -> None:
     emotional_update = {"mood": "calm"}
     attention_update = {"focus": "user"}
     avatar_state = {"expression": "neutral"}
-    memory_intent = {"kind": "observation"}
 
     output = CognitiveOutput(
         trace=TraceContext.root(),
-        memory_intents=(memory_intent,),
         emotional_update=emotional_update,
         attention_update=attention_update,
         avatar_state=avatar_state,
@@ -88,25 +86,21 @@ def test_cognitive_output_copies_mutable_mapping_inputs() -> None:
     emotional_update["mood"] = "angry"
     attention_update["focus"] = "other"
     avatar_state["expression"] = "angry"
-    memory_intent["kind"] = "changed"
 
     assert output.emotional_update["mood"] == "calm"
     assert output.attention_update["focus"] == "user"
     assert output.avatar_state["expression"] == "neutral"
-    assert output.memory_intents[0]["kind"] == "observation"
 
 
 def test_cognitive_output_mapping_fields_are_read_only() -> None:
     output = CognitiveOutput(
         trace=TraceContext.root(),
-        memory_intents=({"kind": "observation"},),
         emotional_update={"mood": "calm"},
         attention_update={"focus": "user"},
         avatar_state={"expression": "neutral"},
     )
 
     mappings = (
-        output.memory_intents[0],
         output.emotional_update,
         output.attention_update,
         output.avatar_state,
@@ -119,3 +113,53 @@ def test_cognitive_output_mapping_fields_are_read_only() -> None:
             pass
         else:
             raise AssertionError("CognitiveOutput mappings must be read-only")
+
+
+def test_memory_intent_must_share_cognitive_output_correlation() -> None:
+    from ayeon.contracts.memory import MemoryIntent
+
+    output_trace = TraceContext.root()
+    intent = MemoryIntent(
+        content={"kind": "observation"},
+        proposed_by="cognition",
+        trace=TraceContext.root(),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="memory intent must share CognitiveOutput correlation_id",
+    ):
+        CognitiveOutput(
+            trace=output_trace,
+            memory_intents=(intent,),
+        )
+
+
+def test_cognitive_output_preserves_memory_intent_identity() -> None:
+    from ayeon.contracts.memory import MemoryIntent
+
+    trace = TraceContext.root()
+    intent = MemoryIntent(
+        content={"kind": "observation"},
+        proposed_by="cognition",
+        trace=trace,
+    )
+
+    output = CognitiveOutput(
+        trace=trace,
+        memory_intents=(intent,),
+    )
+
+    assert output.memory_intents[0] is intent
+    assert output.memory_intents[0].memory_intent_id == intent.memory_intent_id
+
+
+def test_cognitive_output_rejects_non_memory_intent() -> None:
+    with pytest.raises(
+        TypeError,
+        match="memory_intents must contain only MemoryIntent",
+    ):
+        CognitiveOutput(
+            trace=TraceContext.root(),
+            memory_intents=({"kind": "observation"},),
+        )
