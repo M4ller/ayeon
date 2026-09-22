@@ -47,6 +47,9 @@ class SQLiteMemoryRepository:
                     f"Unsupported SQLite schema version: {schema_version}."
                 )
 
+            if schema_version == 0:
+                connection.execute("BEGIN IMMEDIATE")
+
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_records (

@@ -243,3 +243,125 @@ def test_sqlite_repository_reopens_version_one_without_losing_data(
 
     assert schema_version == 1
     assert row_count == 1
+
+def test_sqlite_schema_bootstrap_runs_inside_explicit_transaction(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "memory.db"
+    real_connect = sqlite3.connect
+    transaction_states: list[bool] = []
+
+    class ObservedConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            if "CREATE TABLE IF NOT EXISTS memory_records" in sql:
+                transaction_states.append(self.in_transaction)
+            return super().execute(sql, parameters)
+
+    def observed_connect(*args, **kwargs):
+        kwargs["factory"] = ObservedConnection
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "ayeon.memory.sqlite_repository.sqlite3.connect",
+        observed_connect,
+    )
+
+    SQLiteMemoryRepository(database_path)
+
+    assert transaction_states == [True]
+
+def test_sqlite_schema_bootstrap_rolls_back_on_failure(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "memory.db"
+    real_connect = sqlite3.connect
+
+    class FailingBootstrapConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            if sql.strip() == "PRAGMA user_version = 1":
+                raise RuntimeError("simulated bootstrap failure")
+            return super().execute(sql, parameters)
+
+    def failing_connect(*args, **kwargs):
+        kwargs["factory"] = FailingBootstrapConnection
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "ayeon.memory.sqlite_repository.sqlite3.connect",
+        failing_connect,
+    )
+
+    try:
+        SQLiteMemoryRepository(database_path)
+    except RuntimeError as error:
+        assert str(error) == "simulated bootstrap failure"
+    else:
+        raise AssertionError(
+            "Repository bootstrap unexpectedly succeeded."
+        )
+
+    with real_connect(database_path) as connection:
+        schema_version = connection.execute(
+            "PRAGMA user_version"
+        ).fetchone()[0]
+        table = connection.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name = 'memory_records'
+            """
+        ).fetchone()
+
+    assert schema_version == 0
+    assert table is None
+
+def test_sqlite_store_rolls_back_when_failure_occurs_after_insert(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    database_path = tmp_path / "memory.db"
+    repository = SQLiteMemoryRepository(database_path)
+    record = make_record()
+    real_connect = sqlite3.connect
+
+    class FailingStoreConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            cursor = super().execute(sql, parameters)
+
+            if "INSERT INTO memory_records" in sql:
+                raise RuntimeError("simulated failure after insert")
+
+            return cursor
+
+    def failing_connect(*args, **kwargs):
+        kwargs["factory"] = FailingStoreConnection
+        return real_connect(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "ayeon.memory.sqlite_repository.sqlite3.connect",
+        failing_connect,
+    )
+
+    try:
+        repository.store(record)
+    except RuntimeError as error:
+        assert str(error) == "simulated failure after insert"
+    else:
+        raise AssertionError(
+            "Repository store unexpectedly succeeded."
+        )
+
+    with real_connect(database_path) as connection:
+        row = connection.execute(
+            """
+            SELECT memory_record_id
+            FROM memory_records
+            WHERE memory_record_id = ?
+            """,
+            (str(record.memory_record_id),),
+        ).fetchone()
+
+    assert row is None
