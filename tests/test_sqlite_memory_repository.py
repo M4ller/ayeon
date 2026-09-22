@@ -365,3 +365,29 @@ def test_sqlite_store_rolls_back_when_failure_occurs_after_insert(
         ).fetchone()
 
     assert row is None
+
+def test_sqlite_repository_releases_database_after_initialization(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "memory.db"
+
+    SQLiteMemoryRepository(database_path)
+
+    database_path.unlink()
+
+    assert not database_path.exists()
+
+def test_sqlite_repository_releases_database_after_store(
+    tmp_path,
+) -> None:
+    database_path = tmp_path / "memory.db"
+    repository = SQLiteMemoryRepository(database_path)
+    record = make_record()
+
+    result = repository.store(record)
+
+    assert result.state is ResultState.SUCCESS
+
+    database_path.unlink()
+
+    assert not database_path.exists()
