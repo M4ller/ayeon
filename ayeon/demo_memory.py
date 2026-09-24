@@ -1,11 +1,11 @@
-﻿"""Interactive, session-only demonstration of Ayeon's memory pipeline."""
+"""Interactive, session-only demonstration of Ayeon's memory pipeline."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from ayeon.contracts.common import ResultState, TraceContext
+from ayeon.contracts.common import HealthState, ResultState, TraceContext
 from ayeon.contracts.memory import (
     AdmittedMemoryIntent,
     MemoryAdmissionDecision,
@@ -19,6 +19,10 @@ from ayeon.contracts.memory_context_eligibility import (
 from ayeon.contracts.memory_context_relevance import (
     MemoryContextRelevanceOutcome,
 )
+from ayeon.contracts.state import AyeonStateSnapshot
+from ayeon.core.cognition.coordinator import CognitionCoordinator
+from ayeon.core.context.builder import ContextBuilder
+from ayeon.demo_cognition import DemoCognitionEngine
 from ayeon.memory.context_eligibility import MemoryContextEligibilityPolicy
 from ayeon.memory.context_relevance import MemoryContextRelevanceCoordinator
 from ayeon.memory.deterministic_persistence_verifier import (
@@ -53,6 +57,11 @@ def main() -> None:
         repository = SQLiteMemoryRepository(database_path)
         reader = SQLiteDurableMemoryEvidenceReader(database_path)
         saved = []
+        coordinator = CognitionCoordinator(
+            context_builder=ContextBuilder(),
+            cognition_engine=DemoCognitionEngine(),
+        )
+        sequence = 0
 
         print("Ayeon · demo de memoria (solo durante esta sesión)")
         print("Comandos: guardar: <dato> | recordar: <palabra> | salir")
@@ -92,6 +101,9 @@ def main() -> None:
                     print("Ayeon> No pude guardar ese dato.")
                 continue
 
+            if action == "recordar" and separator and not value:
+                print("Ayeon> Escribe una palabra después de recordar:")
+                continue
             if action == "recordar" and separator and value:
                 matches = []
                 for record, persistence in saved:
@@ -127,7 +139,16 @@ def main() -> None:
                     print("Ayeon> No encontré un recuerdo verificado con esa palabra.")
                 continue
 
-            print("Ayeon> Usa guardar: <dato>, recordar: <palabra> o salir.")
+            sequence += 1
+            output = coordinator.process(
+                trace=TraceContext.root(),
+                user_input=command,
+                state_snapshot=AyeonStateSnapshot(
+                    sequence=sequence,
+                    runtime_health=HealthState.HEALTHY,
+                ),
+            )
+            print(f"Ayeon> {output.spoken_response}")
 
 
 if __name__ == "__main__":
