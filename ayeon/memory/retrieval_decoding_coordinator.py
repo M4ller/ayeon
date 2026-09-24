@@ -1,4 +1,4 @@
-"""Deterministic coordination for memory retrieval and decoding."""
+﻿"""Coordinator for durable memory retrieval and decoding."""
 
 from __future__ import annotations
 
@@ -12,11 +12,7 @@ from ayeon.memory.retriever import MemoryRetriever
 
 
 class MemoryRetrievalDecodingCoordinator:
-    """Coordinate durable retrieval with deterministic decoding.
-
-    Retrieval and decoding remain distinct operations. Decoding does not
-    imply reconstruction, verification, relevance, or context inclusion.
-    """
+    """Coordinate retrieving a durable payload and decoding it."""
 
     def retrieve_and_decode(
         self,
@@ -33,6 +29,14 @@ class MemoryRetrievalDecodingCoordinator:
                 outcome=MemoryDecodeOutcome.NOT_FOUND,
                 decoded=None,
                 reason="Durable memory record was not found.",
+            )
+
+        if retrieval.outcome is MemoryRetrievalOutcome.UNKNOWN:
+            return MemoryRetrievalDecodingResult(
+                retrieval=retrieval,
+                outcome=MemoryDecodeOutcome.UNKNOWN,
+                decoded=None,
+                reason="Retrieval outcome is unknown.",
             )
 
         raise NotImplementedError(
