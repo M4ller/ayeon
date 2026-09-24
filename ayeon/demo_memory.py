@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -21,8 +22,10 @@ from ayeon.contracts.memory_context_relevance import (
 )
 from ayeon.contracts.state import AyeonStateSnapshot
 from ayeon.core.cognition.coordinator import CognitionCoordinator
+from ayeon.core.cognition.text_engine import TextCognitionEngine
 from ayeon.core.context.builder import ContextBuilder
 from ayeon.demo_cognition import DemoCognitionEngine
+from ayeon.gemini_generator import GeminiGenerator
 from ayeon.memory.context_eligibility import MemoryContextEligibilityPolicy
 from ayeon.memory.context_relevance import MemoryContextRelevanceCoordinator
 from ayeon.memory.deterministic_persistence_verifier import (
@@ -72,9 +75,15 @@ def main() -> None:
         repository = SQLiteMemoryRepository(database_path)
         reader = SQLiteDurableMemoryEvidenceReader(database_path)
         saved = []
+        use_gemini = os.getenv("AYEON_USE_GEMINI") == "1"
+        engine = (
+            TextCognitionEngine(GeminiGenerator())
+            if use_gemini
+            else DemoCognitionEngine()
+        )
         coordinator = CognitionCoordinator(
             context_builder=ContextBuilder(),
-            cognition_engine=DemoCognitionEngine(),
+            cognition_engine=engine,
         )
         sequence = 0
 
@@ -129,7 +138,7 @@ def main() -> None:
                 continue
 
             is_recall = action == "recordar" and separator and bool(value)
-            is_memory_question = command.casefold().startswith(
+            is_memory_question = command.casefold().removeprefix("\u00bf").startswith(
                 ("que me gusta", "qué me gusta")
             )
             if is_recall or is_memory_question:
@@ -159,11 +168,36 @@ def main() -> None:
                         evaluator=KeywordEvaluator(),
                     )
                     if relevance.outcome is MemoryContextRelevanceOutcome.RELEVANT:
-                        matches.append(record.content["fact"])
+                        fact = (
+                            decoding.decoded.content.get("fact")
+                            if decoding.decoded is not None
+                            else None
+                        )
+                        if isinstance(fact, str):
+                            matches.append(fact)
 
                 if matches:
-                    for fact in matches:
-                        print(f"Ayeon> Recuerdo: {fact}")
+                    if use_gemini:
+                        prompt = (
+                            f"Pregunta del usuario: {search_query}\n"
+                            "Recuerdos verificados relevantes:\n"
+                            + "\n".join(f"- {fact}" for fact in matches)
+                            + "\nResponde usando solo esos recuerdos. "
+                            "Si no contienen la respuesta, dilo."
+                        )
+                        sequence += 1
+                        output = coordinator.process(
+                            trace=TraceContext.root(),
+                            user_input=prompt,
+                            state_snapshot=AyeonStateSnapshot(
+                                sequence=sequence,
+                                runtime_health=HealthState.HEALTHY,
+                            ),
+                        )
+                        print(f"Ayeon> {output.spoken_response}")
+                    else:
+                        for fact in matches:
+                            print(f"Ayeon> Recuerdo: {fact}")
                 else:
                     print("Ayeon> No encontré un recuerdo verificado con esa palabra.")
                 continue
