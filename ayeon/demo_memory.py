@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import ExitStack
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -20,6 +21,7 @@ from ayeon.contracts.memory_context_eligibility import (
 from ayeon.contracts.memory_context_relevance import (
     MemoryContextRelevanceOutcome,
 )
+from ayeon.contracts.memory_persistence import MemoryPersistenceResult
 from ayeon.contracts.state import AyeonStateSnapshot
 from ayeon.core.cognition.coordinator import CognitionCoordinator
 from ayeon.core.cognition.text_engine import TextCognitionEngine
@@ -31,6 +33,7 @@ from ayeon.memory.context_relevance import MemoryContextRelevanceCoordinator
 from ayeon.memory.deterministic_persistence_verifier import (
     DeterministicMemoryPersistenceVerifier,
 )
+from ayeon.memory.record_reference_store import LocalMemoryReferenceStore
 from ayeon.memory.retrieval_decoding_coordinator import (
     MemoryRetrievalDecodingCoordinator,
 )
@@ -70,11 +73,34 @@ class KeywordEvaluator:
         return MemoryContextRelevanceOutcome.UNKNOWN
 
 def main() -> None:
-    with TemporaryDirectory() as directory:
-        database_path = Path(directory) / "memory.db"
+    with ExitStack() as stack:
+        configured_path = os.getenv("AYEON_MEMORY_DB", "").strip()
+        if configured_path:
+            database_path = Path(configured_path).expanduser()
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+            references = LocalMemoryReferenceStore(
+                database_path.with_suffix(".references.jsonl")
+            )
+        else:
+            directory = stack.enter_context(TemporaryDirectory())
+            database_path = Path(directory) / "memory.db"
+            references = None
+
         repository = SQLiteMemoryRepository(database_path)
         reader = SQLiteDurableMemoryEvidenceReader(database_path)
         saved = []
+        if references is not None:
+            for record in references.load():
+                saved.append((
+                    record,
+                    MemoryPersistenceResult(
+                        memory_record_id=record.memory_record_id,
+                        repository_name=repository.name,
+                        state=ResultState.UNKNOWN,
+                        trace=record.trace,
+                        summary="Reference restored; durable bytes require verification.",
+                    ),
+                ))
         use_gemini = os.getenv("AYEON_USE_GEMINI") == "1"
         engine = (
             TextCognitionEngine(GeminiGenerator())
@@ -87,7 +113,10 @@ def main() -> None:
         )
         sequence = 0
 
-        print("Ayeon · demo de memoria (solo durante esta sesión)")
+        if references is None:
+            print("Ayeon · demo de memoria (solo durante esta sesión)")
+        else:
+            print("Ayeon · demo de memoria persistente")
         print("Comandos: guardar: <dato> | recordar: <palabra> | salir")
 
         while True:
@@ -124,6 +153,12 @@ def main() -> None:
                 )
                 persistence = repository.store(record)
                 if persistence.state is ResultState.SUCCESS:
+                    if references is not None:
+                        try:
+                            references.append(record)
+                        except OSError:
+                            print("Ayeon> No pude conservar la referencia del dato.")
+                            continue
                     saved.append((record, persistence))
                     print("Ayeon> Guardé ese dato para esta sesión.")
                 else:
