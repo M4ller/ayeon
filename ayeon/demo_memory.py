@@ -37,19 +37,34 @@ from ayeon.memory.sqlite_repository import SQLiteMemoryRepository
 from ayeon.memory.sqlite_retriever import SQLiteMemoryRetriever
 
 
+def _search_words(text: str) -> set[str]:
+    import re
+    import unicodedata
+
+    normalized = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", text.casefold())
+        if not unicodedata.combining(character)
+    )
+    ignored = {"que", "me", "el", "la", "los", "las", "un", "una", "de"}
+    return set(re.findall(r"\w+", normalized)) - ignored
+
+
 class KeywordEvaluator:
-    """Small demo evaluator; uncertain matches remain UNKNOWN."""
+    """Conservative word matching for this console demo."""
 
     def evaluate(self, user_input, decoded):
         fact = decoded.content.get("fact")
         if not isinstance(fact, str):
             return MemoryContextRelevanceOutcome.UNKNOWN
 
-        words = user_input.casefold().split()
-        if words and all(word in fact.casefold() for word in words):
+        query_words = _search_words(user_input)
+        fact_words = _search_words(fact)
+        same_negation = ("no" in query_words) == ("no" in fact_words)
+
+        if query_words and query_words <= fact_words and same_negation:
             return MemoryContextRelevanceOutcome.RELEVANT
         return MemoryContextRelevanceOutcome.UNKNOWN
-
 
 def main() -> None:
     with TemporaryDirectory() as directory:
@@ -104,7 +119,16 @@ def main() -> None:
             if action == "recordar" and separator and not value:
                 print("Ayeon> Escribe una palabra después de recordar:")
                 continue
-            if action == "recordar" and separator and value:
+            if action == "recordar" and not separator:
+                print("Ayeon> Escribe recordar: <palabra>")
+                continue
+
+            is_recall = action == "recordar" and separator and bool(value)
+            is_memory_question = command.casefold().startswith(
+                ("que me gusta", "qué me gusta")
+            )
+            if is_recall or is_memory_question:
+                search_query = value if is_recall else command
                 matches = []
                 for record, persistence in saved:
                     decoding = MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
@@ -124,7 +148,7 @@ def main() -> None:
                         continue
 
                     relevance = MemoryContextRelevanceCoordinator().evaluate(
-                        user_input=value,
+                        user_input=search_query,
                         eligibility=eligibility,
                         decoded=decoding.decoded,
                         evaluator=KeywordEvaluator(),
