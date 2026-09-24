@@ -125,6 +125,14 @@ def main() -> None:
             action = action.strip().casefold()
             value = value.strip()
 
+            if action == "recuerda":
+                action = "recordar"
+
+            if not separator and command.casefold().startswith("recuerda "):
+                action = "recordar"
+                separator = ":"
+                value = command[len("recuerda "):].strip()
+
             if not separator and command.casefold().startswith("recordar "):
                 action = "recordar"
                 separator = ":"
