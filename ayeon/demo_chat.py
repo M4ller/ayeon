@@ -10,16 +10,22 @@ from ayeon.core.cognition.coordinator import CognitionCoordinator
 from ayeon.core.cognition.text_engine import TextCognitionEngine
 from ayeon.core.context.builder import ContextBuilder
 from ayeon.demo_cognition import DemoCognitionEngine
+from ayeon.gemini_generator import GeminiGenerator
 from ayeon.openai_generator import OpenAIResponsesGenerator
 
 
 def main() -> None:
+    use_gemini = os.getenv("AYEON_USE_GEMINI") == "1"
     use_openai = os.getenv("AYEON_USE_OPENAI") == "1"
-    engine = (
-        TextCognitionEngine(OpenAIResponsesGenerator())
-        if use_openai
-        else DemoCognitionEngine()
-    )
+    if use_gemini and use_openai:
+        raise ValueError("Select only one API provider")
+
+    if use_gemini:
+        engine = TextCognitionEngine(GeminiGenerator())
+    elif use_openai:
+        engine = TextCognitionEngine(OpenAIResponsesGenerator())
+    else:
+        engine = DemoCognitionEngine()
     coordinator = CognitionCoordinator(
         context_builder=ContextBuilder(),
         cognition_engine=engine,

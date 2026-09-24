@@ -17,6 +17,7 @@ dev = [
 ]
 
 api = ["openai"]
+gemini = ["google-genai"]
 
 [tool.setuptools.packages.find]
 include = ["ayeon*"]
