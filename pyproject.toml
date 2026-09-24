@@ -16,6 +16,8 @@ dev = [
     "ruff>=0.6",
 ]
 
+api = ["openai"]
+
 [tool.setuptools.packages.find]
 include = ["ayeon*"]
 
