@@ -24,6 +24,9 @@ class MemoryRetrievalDecodingCoordinator:
 
         retrieval = retriever.retrieve(memory_record_id)
 
+        if retrieval.memory_record_id != memory_record_id:
+            raise ValueError("retrieval memory_record_id must match request")
+
         if retrieval.outcome is MemoryRetrievalOutcome.NOT_FOUND:
             return MemoryRetrievalDecodingResult(
                 retrieval=retrieval,

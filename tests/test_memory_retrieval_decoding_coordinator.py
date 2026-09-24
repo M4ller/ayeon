@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from ayeon.contracts.common import MemoryRecordId, new_memory_record_id
 from ayeon.contracts.memory_retrieval import (
     MemoryRetrievalOutcome,
@@ -191,10 +193,32 @@ def test_coordinator_rejects_retrieval_for_different_record_id() -> None:
                 reason="Payload found.",
             )
 
-    result = MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
-        requested_id,
-        WrongIdRetriever(),
-    )
+    with pytest.raises(ValueError, match="memory_record_id"):
+        MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
+            requested_id,
+            WrongIdRetriever(),
+        )
 
-    assert result.outcome is MemoryDecodeOutcome.UNKNOWN
-    assert result.decoded is None
+def test_coordinator_rejects_not_found_for_different_record_id() -> None:
+    requested_id = new_memory_record_id()
+    different_id = new_memory_record_id()
+
+    class WrongIdRetriever:
+        @property
+        def name(self) -> str:
+            return "wrong-id-retriever"
+
+        def retrieve(self, memory_record_id: MemoryRecordId) -> MemoryRetrievalResult:
+            return MemoryRetrievalResult(
+                memory_record_id=different_id,
+                outcome=MemoryRetrievalOutcome.NOT_FOUND,
+                retrieved_by=self.name,
+                payload=None,
+                reason="Record is absent.",
+            )
+
+    with pytest.raises(ValueError, match="memory_record_id"):
+        MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
+            requested_id,
+            WrongIdRetriever(),
+        )
