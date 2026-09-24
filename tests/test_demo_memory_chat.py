@@ -1,6 +1,16 @@
 """Tests for the combined memory and text console demo."""
 
+import pytest
+
 from ayeon.demo_memory import main
+
+
+@pytest.fixture(autouse=True)
+def use_temporary_memory(monkeypatch) -> None:
+    monkeypatch.delenv("AYEON_MEMORY_DB", raising=False)
+
+
+
 
 
 def test_one_session_can_remember_and_respond(monkeypatch, capsys) -> None:

@@ -1,4 +1,4 @@
-﻿"""Offline test for selecting Gemini in Ayeon's text console."""
+"""Offline test for selecting Gemini in Ayeon's text console."""
 
 from ayeon.demo_chat import main
 
@@ -14,7 +14,7 @@ def test_chat_can_use_injected_gemini_generator(monkeypatch, capsys) -> None:
     monkeypatch.setenv("AYEON_USE_GEMINI", "1")
     monkeypatch.delenv("AYEON_USE_OPENAI", raising=False)
     monkeypatch.setattr(
-        "ayeon.demo_chat.GeminiGenerator",
+        "ayeon.demo_chat.GeminiChatGenerator",
         lambda: FakeGenerator(),
     )
 

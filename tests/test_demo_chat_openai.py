@@ -1,4 +1,4 @@
-﻿"""Offline tests for selecting OpenAI in the text console."""
+"""Offline tests for selecting OpenAI in the text console."""
 
 from ayeon.demo_chat import main
 
@@ -12,6 +12,8 @@ def test_chat_can_use_injected_openai_generator(monkeypatch, capsys) -> None:
     messages = iter(["hola", "salir"])
     monkeypatch.setattr("builtins.input", lambda prompt: next(messages))
     monkeypatch.setenv("AYEON_USE_OPENAI", "1")
+    monkeypatch.delenv("AYEON_USE_GEMINI", raising=False)
+    monkeypatch.delenv("AYEON_USE_GEMINI", raising=False)
     monkeypatch.setattr(
         "ayeon.demo_chat.OpenAIResponsesGenerator",
         lambda: FakeGenerator(),

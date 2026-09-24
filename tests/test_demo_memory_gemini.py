@@ -1,6 +1,16 @@
-﻿"""Offline test for verified memory reaching Gemini in one session."""
+"""Offline test for verified memory reaching Gemini in one session."""
+
+import pytest
 
 from ayeon.demo_memory import main
+
+
+@pytest.fixture(autouse=True)
+def use_temporary_memory(monkeypatch) -> None:
+    monkeypatch.delenv("AYEON_MEMORY_DB", raising=False)
+
+
+
 
 
 def test_verified_relevant_memory_reaches_gemini(monkeypatch, capsys) -> None:
