@@ -93,25 +93,6 @@ def _verified_memory(record, persistence, database_path, reader):
 
 
 
-def _verified_memory(record, persistence, database_path, reader):
-    decoding = MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
-        record.memory_record_id,
-        SQLiteMemoryRetriever(database_path),
-    )
-    retrieval_check = MemoryRetrievalVerifier(reader).verify(decoding)
-    persistence_check = DeterministicMemoryPersistenceVerifier(reader).verify(
-        record, persistence
-    )
-    eligibility = MemoryContextEligibilityPolicy().evaluate(
-        record=record,
-        retrieval_verification=retrieval_check,
-        persistence_verification=persistence_check,
-    )
-    if eligibility.outcome is MemoryContextEligibilityOutcome.ELIGIBLE:
-        return decoding.decoded
-    return None
-
-
 def main() -> None:
     with ExitStack() as stack:
         configured_path = os.getenv("AYEON_MEMORY_DB", "").strip()
@@ -157,7 +138,7 @@ def main() -> None:
             print("Ayeon · demo de memoria (solo durante esta sesión)")
         else:
             print("Ayeon · demo de memoria persistente")
-        print("Comandos: guardar: <dato> | recordar: <palabra> | salir")
+        print("Comandos: guardar: <dato> | recordar: <palabra> | listar | olvidar: <id> | salir")
 
         while True:
             command = input("\nTú> ").strip()
@@ -224,50 +205,28 @@ def main() -> None:
                 print("Ayeon> Recuerdo eliminado.")
                 continue
 
-            if command.casefold() == "listar":
-                listed = False
-                for record, persistence in saved:
-                    decoded = _verified_memory(
-                        record, persistence, database_path, reader
-                    )
-                    if decoded is not None:
-                        fact = decoded.content.get("fact")
-                        if isinstance(fact, str):
-                            print(f"Ayeon> {record.memory_record_id} | {fact}")
-                            listed = True
-                if not listed:
-                    print("Ayeon> No hay recuerdos verificados.")
-                continue
-
-            if action == "olvidar":
-                if not separator or not value:
-                    print("Ayeon> Escribe olvidar: <id>")
-                    continue
-
-                selected = [
-                    pair for pair in saved
-                    if str(pair[0].memory_record_id) == value
-                ]
-                if len(selected) != 1:
-                    print("Ayeon> No encontre ese recuerdo.")
-                    continue
-
-                record, persistence = selected[0]
-                if _verified_memory(record, persistence, database_path, reader) is None:
-                    print("Ayeon> No pude verificar ese recuerdo.")
-                    continue
-                if references is not None and not references.remove(record):
-                    print("Ayeon> No pude retirar su referencia.")
-                    continue
-                if not repository.delete(record):
-                    print("Ayeon> No pude retirar el registro.")
-                    continue
-
-                saved.remove(selected[0])
-                print("Ayeon> Recuerdo eliminado.")
-                continue
-
             if action == "guardar" and separator and value:
+                normalized_value = " ".join(value.casefold().split())
+                already_saved = False
+                for saved_record, saved_persistence in saved:
+                    decoded = _verified_memory(
+                        saved_record, saved_persistence, database_path, reader
+                    )
+                    if decoded is None:
+                        continue
+                    existing_fact = decoded.content.get("fact")
+                    if (
+                        isinstance(existing_fact, str)
+                        and " ".join(existing_fact.casefold().split())
+                        == normalized_value
+                    ):
+                        already_saved = True
+                        break
+
+                if already_saved:
+                    print("Ayeon> Ya existe ese dato guardado.")
+                    continue
+
                 trace = TraceContext.root()
                 intent = MemoryIntent(
                     content={"fact": value},

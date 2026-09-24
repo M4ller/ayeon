@@ -1,4 +1,4 @@
-﻿"""Tests for memory surviving separate console sessions."""
+"""Tests for memory surviving separate console sessions."""
 
 from ayeon.demo_memory import main
 
@@ -94,3 +94,36 @@ def test_damaged_reference_is_not_recalled(
     main()
 
     assert "No encontré un recuerdo verificado" in capsys.readouterr().out
+
+
+def test_same_fact_is_not_saved_twice_after_restart(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    import sqlite3
+
+    database = tmp_path / "ayeon-memory.db"
+    monkeypatch.setenv("AYEON_MEMORY_DB", str(database))
+    monkeypatch.delenv("AYEON_USE_GEMINI", raising=False)
+
+    first_session = iter(["guardar: me gusta el cafe", "salir"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(first_session))
+    main()
+    capsys.readouterr()
+
+    second_session = iter([
+        "guardar:  ME GUSTA EL CAFE  ",
+        "recordar: cafe",
+        "salir",
+    ])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(second_session))
+    main()
+
+    output = capsys.readouterr().out
+    assert "Ya existe ese dato guardado." in output
+    assert output.count("Recuerdo: me gusta el cafe") == 1
+
+    with sqlite3.connect(database) as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) FROM memory_records"
+        ).fetchone()[0]
+    assert count == 1
