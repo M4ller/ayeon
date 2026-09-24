@@ -1,4 +1,4 @@
-﻿"""Tests for the combined memory and text console demo."""
+"""Tests for the combined memory and text console demo."""
 
 from ayeon.demo_memory import main
 
@@ -58,3 +58,19 @@ def test_recall_without_colon_shows_usage(monkeypatch, capsys) -> None:
     main()
 
     assert "Escribe recordar: <palabra>" in capsys.readouterr().out
+
+def test_recall_without_colon(monkeypatch, capsys) -> None:
+    messages = iter(
+        [
+            "guardar: me gusta el cafe",
+            "recordar cafe",
+            "salir",
+        ]
+    )
+    monkeypatch.setattr("builtins.input", lambda prompt: next(messages))
+
+    main()
+
+    output = capsys.readouterr().out
+    assert "Guardé ese dato" in output
+    assert "Recuerdo: me gusta el cafe" in output

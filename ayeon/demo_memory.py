@@ -87,6 +87,11 @@ def main() -> None:
             action = action.strip().casefold()
             value = value.strip()
 
+            if not separator and command.casefold().startswith("recordar "):
+                action = "recordar"
+                separator = ":"
+                value = command[len("recordar "):].strip()
+
             if command.casefold() == "salir":
                 break
 
