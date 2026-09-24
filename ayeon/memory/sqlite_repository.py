@@ -125,3 +125,20 @@ class SQLiteMemoryRepository:
             trace=record.trace,
             summary="Memory record stored durably.",
         )
+
+    def delete(self, record: MemoryRecord) -> bool:
+        """Delete only when durable bytes equal the expected record."""
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute("BEGIN IMMEDIATE")
+                result = connection.execute(
+                    """
+                    DELETE FROM memory_records
+                    WHERE memory_record_id = ? AND record_payload = ?
+                    """,
+                    (
+                        str(record.memory_record_id),
+                        encode_memory_record(record),
+                    ),
+                )
+                return result.rowcount == 1

@@ -1,4 +1,4 @@
-﻿"""Separate local reference for expected durable memory records."""
+"""Separate local reference for expected durable memory records."""
 
 from __future__ import annotations
 
@@ -29,6 +29,26 @@ class LocalMemoryReferenceStore:
             stream.write(encode_memory_record(record) + b"\n")
             stream.flush()
             os.fsync(stream.fileno())
+
+    def remove(self, record: MemoryRecord) -> bool:
+        """Remove only an exact canonical reference."""
+        if not self._path.exists():
+            return False
+
+        lines = self._path.read_bytes().splitlines(keepends=True)
+        expected = encode_memory_record(record) + b"\n"
+        if any(not line.endswith(b"\n") for line in lines):
+            return False
+        if lines.count(expected) != 1:
+            return False
+
+        temporary = self._path.with_name(self._path.name + ".tmp")
+        with temporary.open("wb") as stream:
+            stream.write(b"".join(line for line in lines if line != expected))
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, self._path)
+        return True
 
     def load(self) -> list[MemoryRecord]:
         if not self._path.exists():

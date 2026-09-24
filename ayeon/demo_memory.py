@@ -72,6 +72,46 @@ class KeywordEvaluator:
             return MemoryContextRelevanceOutcome.RELEVANT
         return MemoryContextRelevanceOutcome.UNKNOWN
 
+
+def _verified_memory(record, persistence, database_path, reader):
+    decoding = MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
+        record.memory_record_id,
+        SQLiteMemoryRetriever(database_path),
+    )
+    retrieval_check = MemoryRetrievalVerifier(reader).verify(decoding)
+    persistence_check = DeterministicMemoryPersistenceVerifier(reader).verify(
+        record, persistence
+    )
+    eligibility = MemoryContextEligibilityPolicy().evaluate(
+        record=record,
+        retrieval_verification=retrieval_check,
+        persistence_verification=persistence_check,
+    )
+    if eligibility.outcome is MemoryContextEligibilityOutcome.ELIGIBLE:
+        return decoding.decoded
+    return None
+
+
+
+def _verified_memory(record, persistence, database_path, reader):
+    decoding = MemoryRetrievalDecodingCoordinator().retrieve_and_decode(
+        record.memory_record_id,
+        SQLiteMemoryRetriever(database_path),
+    )
+    retrieval_check = MemoryRetrievalVerifier(reader).verify(decoding)
+    persistence_check = DeterministicMemoryPersistenceVerifier(reader).verify(
+        record, persistence
+    )
+    eligibility = MemoryContextEligibilityPolicy().evaluate(
+        record=record,
+        retrieval_verification=retrieval_check,
+        persistence_verification=persistence_check,
+    )
+    if eligibility.outcome is MemoryContextEligibilityOutcome.ELIGIBLE:
+        return decoding.decoded
+    return None
+
+
 def main() -> None:
     with ExitStack() as stack:
         configured_path = os.getenv("AYEON_MEMORY_DB", "").strip()
@@ -140,6 +180,92 @@ def main() -> None:
 
             if command.casefold() == "salir":
                 break
+
+            if command.casefold() == "listar":
+                listed = False
+                for record, persistence in saved:
+                    decoded = _verified_memory(
+                        record, persistence, database_path, reader
+                    )
+                    if decoded is not None:
+                        fact = decoded.content.get("fact")
+                        if isinstance(fact, str):
+                            print(f"Ayeon> {record.memory_record_id} | {fact}")
+                            listed = True
+                if not listed:
+                    print("Ayeon> No hay recuerdos verificados.")
+                continue
+
+            if action == "olvidar":
+                if not separator or not value:
+                    print("Ayeon> Escribe olvidar: <id>")
+                    continue
+
+                selected = [
+                    pair for pair in saved
+                    if str(pair[0].memory_record_id) == value
+                ]
+                if len(selected) != 1:
+                    print("Ayeon> No encontre ese recuerdo.")
+                    continue
+
+                record, persistence = selected[0]
+                if _verified_memory(record, persistence, database_path, reader) is None:
+                    print("Ayeon> No pude verificar ese recuerdo.")
+                    continue
+                if references is not None and not references.remove(record):
+                    print("Ayeon> No pude retirar su referencia.")
+                    continue
+                if not repository.delete(record):
+                    print("Ayeon> No pude retirar el registro.")
+                    continue
+
+                saved.remove(selected[0])
+                print("Ayeon> Recuerdo eliminado.")
+                continue
+
+            if command.casefold() == "listar":
+                listed = False
+                for record, persistence in saved:
+                    decoded = _verified_memory(
+                        record, persistence, database_path, reader
+                    )
+                    if decoded is not None:
+                        fact = decoded.content.get("fact")
+                        if isinstance(fact, str):
+                            print(f"Ayeon> {record.memory_record_id} | {fact}")
+                            listed = True
+                if not listed:
+                    print("Ayeon> No hay recuerdos verificados.")
+                continue
+
+            if action == "olvidar":
+                if not separator or not value:
+                    print("Ayeon> Escribe olvidar: <id>")
+                    continue
+
+                selected = [
+                    pair for pair in saved
+                    if str(pair[0].memory_record_id) == value
+                ]
+                if len(selected) != 1:
+                    print("Ayeon> No encontre ese recuerdo.")
+                    continue
+
+                record, persistence = selected[0]
+                if _verified_memory(record, persistence, database_path, reader) is None:
+                    print("Ayeon> No pude verificar ese recuerdo.")
+                    continue
+                if references is not None and not references.remove(record):
+                    print("Ayeon> No pude retirar su referencia.")
+                    continue
+                if not repository.delete(record):
+                    print("Ayeon> No pude retirar el registro.")
+                    continue
+
+                saved.remove(selected[0])
+                print("Ayeon> Recuerdo eliminado.")
+                continue
 
             if action == "guardar" and separator and value:
                 trace = TraceContext.root()
