@@ -6,6 +6,7 @@ from typing import Protocol
 
 from ayeon.contracts.cognition import CognitiveOutput
 from ayeon.contracts.cognitive_context import CognitiveContext
+from ayeon.core.cognition.memory_prompt_formatter import MemoryPromptFormatter
 
 
 class TextGenerator(Protocol):
@@ -19,6 +20,7 @@ class TextCognitionEngine:
 
     def __init__(self, generator: TextGenerator) -> None:
         self._generator = generator
+        self._memory_formatter = MemoryPromptFormatter()
 
     def process(self, context: CognitiveContext) -> CognitiveOutput:
         prompt = self._build_prompt(context)
@@ -36,14 +38,7 @@ class TextCognitionEngine:
         if not context.memories:
             return context.user_input
 
-        memory_lines = []
-
-        for entry in context.memories:
-            memory_lines.append(
-                f"- {dict(entry.decoded.content)}"
-            )
-
-        memories = "\n".join(memory_lines)
+        memories = self._memory_formatter.format(context.memories)
 
         return (
             "Relevant verified memories:\n"
