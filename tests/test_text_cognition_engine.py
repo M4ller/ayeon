@@ -57,3 +57,54 @@ def test_text_engine_rejects_blank_generator_response() -> None:
                 runtime_health=HealthState.HEALTHY,
             ),
         )
+def test_text_engine_includes_verified_memory_in_prompt() -> None:
+    from datetime import UTC, datetime
+
+    from ayeon.contracts.common import (
+        CausationId,
+        CorrelationId,
+        MemoryIntentId,
+        MemoryRecordId,
+    )
+    from ayeon.contracts.memory_context_entry import MemoryContextEntry
+    from ayeon.contracts.memory_decoding import DecodedMemoryRecord
+
+    prompts = []
+
+    class FakeGenerator:
+        def generate(self, prompt: str) -> str:
+            prompts.append(prompt)
+            return "Lo recuerdo."
+
+    record_id = MemoryRecordId("memory-1")
+
+    memory = MemoryContextEntry(
+        memory_record_id=record_id,
+        decoded=DecodedMemoryRecord(
+            memory_record_id=record_id,
+            source_memory_intent_id=MemoryIntentId("intent-1"),
+            created_at=datetime.now(UTC),
+            correlation_id=CorrelationId("correlation-1"),
+            causation_id=CausationId("causation-1"),
+            content={"name": "Felipe"},
+        ),
+    )
+
+    coordinator = CognitionCoordinator(
+        context_builder=ContextBuilder(),
+        cognition_engine=TextCognitionEngine(FakeGenerator()),
+    )
+
+    coordinator.process(
+        trace=TraceContext.root(),
+        user_input="¿Cómo me llamo?",
+        state_snapshot=AyeonStateSnapshot(
+            sequence=1,
+            runtime_health=HealthState.HEALTHY,
+        ),
+        memories=(memory,),
+    )
+
+    assert len(prompts) == 1
+    assert "Felipe" in prompts[0]
+    assert "¿Cómo me llamo?" in prompts[0]

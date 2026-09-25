@@ -21,7 +21,8 @@ class TextCognitionEngine:
         self._generator = generator
 
     def process(self, context: CognitiveContext) -> CognitiveOutput:
-        response = self._generator.generate(context.user_input)
+        prompt = self._build_prompt(context)
+        response = self._generator.generate(prompt)
 
         if not isinstance(response, str) or not response.strip():
             raise ValueError("text generator must return non-blank text")
@@ -29,4 +30,24 @@ class TextCognitionEngine:
         return CognitiveOutput(
             trace=context.trace,
             spoken_response=response.strip(),
+        )
+
+    def _build_prompt(self, context: CognitiveContext) -> str:
+        if not context.memories:
+            return context.user_input
+
+        memory_lines = []
+
+        for entry in context.memories:
+            memory_lines.append(
+                f"- {dict(entry.decoded.content)}"
+            )
+
+        memories = "\n".join(memory_lines)
+
+        return (
+            "Relevant verified memories:\n"
+            f"{memories}\n\n"
+            "User request:\n"
+            f"{context.user_input}"
         )

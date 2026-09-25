@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ayeon.contracts.cognition import CognitiveOutput
 from ayeon.contracts.common import TraceContext
+from ayeon.contracts.memory_context_entry import MemoryContextEntry
 from ayeon.contracts.state import AyeonStateSnapshot
 from ayeon.core.cognition.engine import CognitionEngine
 from ayeon.core.context.builder import ContextBuilder
@@ -32,6 +33,7 @@ class CognitionCoordinator:
         trace: TraceContext,
         user_input: str,
         state_snapshot: AyeonStateSnapshot,
+        memories: tuple[MemoryContextEntry, ...] = (),
     ) -> CognitiveOutput:
         """Build context and produce one cognitive output."""
 
@@ -39,6 +41,7 @@ class CognitionCoordinator:
             trace=trace,
             user_input=user_input,
             state_snapshot=state_snapshot,
+            memories=memories,
         )
 
         return self._cognition_engine.process(context)
