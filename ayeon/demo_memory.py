@@ -33,6 +33,7 @@ from ayeon.memory.context_relevance import MemoryContextRelevanceCoordinator
 from ayeon.memory.deterministic_persistence_verifier import (
     DeterministicMemoryPersistenceVerifier,
 )
+from ayeon.memory.lexical_relevance import LexicalMemoryRelevanceEvaluator
 from ayeon.memory.record_reference_store import LocalMemoryReferenceStore
 from ayeon.memory.retrieval_decoding_coordinator import (
     MemoryRetrievalDecodingCoordinator,
@@ -293,7 +294,7 @@ def main() -> None:
                         user_input=search_query,
                         eligibility=eligibility,
                         decoded=decoding.decoded,
-                        evaluator=KeywordEvaluator(),
+                        evaluator=LexicalMemoryRelevanceEvaluator(),
                     )
                     if relevance.outcome is MemoryContextRelevanceOutcome.RELEVANT:
                         fact = (
