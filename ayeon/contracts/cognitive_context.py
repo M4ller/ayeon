@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ayeon.contracts.common import TraceContext
+from ayeon.contracts.memory_context_entry import MemoryContextEntry
 from ayeon.contracts.state import AyeonStateSnapshot
 
 
@@ -19,7 +20,19 @@ class CognitiveContext:
     trace: TraceContext
     user_input: str
     state_snapshot: AyeonStateSnapshot
+    memories: tuple[MemoryContextEntry, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.user_input.strip():
             raise ValueError("user_input must not be blank")
+
+        if not isinstance(self.memories, tuple):
+            object.__setattr__(self, "memories", tuple(self.memories))
+
+        if not all(
+            isinstance(memory, MemoryContextEntry)
+            for memory in self.memories
+        ):
+            raise TypeError(
+                "memories must contain only MemoryContextEntry"
+            )

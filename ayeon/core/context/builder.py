@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ayeon.contracts.cognitive_context import CognitiveContext
 from ayeon.contracts.common import TraceContext
+from ayeon.contracts.memory_context_entry import MemoryContextEntry
 from ayeon.contracts.state import AyeonStateSnapshot
 
 
@@ -20,6 +21,7 @@ class ContextBuilder:
         trace: TraceContext,
         user_input: str,
         state_snapshot: AyeonStateSnapshot,
+        memories: tuple[MemoryContextEntry, ...] = (),
     ) -> CognitiveContext:
         """Build one cognitive context from the current input and snapshot."""
 
@@ -27,4 +29,5 @@ class ContextBuilder:
             trace=trace,
             user_input=user_input,
             state_snapshot=state_snapshot,
+            memories=memories,
         )
