@@ -67,7 +67,6 @@ class AyeonApp(QMainWindow):
 
         pantalla = QGuiApplication.primaryScreen().availableGeometry()
 
-        # Si no hay datos válidos o quedan fuera de pantalla, ubicar abajo a la derecha
         if pos_x is None or pos_y is None or pos_x < 0 or pos_x > pantalla.width() - 50:
             pos_x = pantalla.width() - self.width() - 40
             pos_y = pantalla.height() - self.height() - 40
@@ -84,6 +83,13 @@ class AyeonApp(QMainWindow):
         except Exception:
             pass
 
+    def cambiar_expresion_por_indice(self, indice: int):
+        """Cambia a una expresión específica y reinicia el temporizador."""
+        if 0 <= indice < len(self.gestor_sprites.expresiones):
+            self.indice_actual = indice
+            self.actualizar_sprite()
+            self.timer.start(INTERVALO_MS)
+
     def actualizar_sprite(self):
         nombre = self.gestor_sprites.expresiones[self.indice_actual]
         pixmap = self.gestor_sprites.obtener_pixmap_circular(nombre, diametro=300)
@@ -94,9 +100,7 @@ class AyeonApp(QMainWindow):
 
     def siguiente_expresion(self):
         total = len(self.gestor_sprites.expresiones)
-        self.indice_actual = (self.indice_actual + 1) % total
-        self.actualizar_sprite()
-        self.timer.start(INTERVALO_MS)
+        self.cambiar_expresion_por_indice((self.indice_actual + 1) % total)
 
     def nativeEvent(self, eventType, message):
         if self.hotkey_mgr is not None and self.hotkey_mgr.es_evento_hotkey(int(message)):
@@ -121,9 +125,22 @@ class AyeonApp(QMainWindow):
 
     def contextMenuEvent(self, event):
         menu = QMenu(self)
+
+        # Submenú con la lista de expresiones
+        menu_expresiones = menu.addMenu("Expresión")
+        for i, nombre in enumerate(self.gestor_sprites.expresiones):
+            accion = QAction(nombre.capitalize(), self)
+            if i == self.indice_actual:
+                accion.setText(f"✓ {nombre.capitalize()}")
+            accion.triggered.connect(lambda checked=False, idx=i: self.cambiar_expresion_por_indice(idx))
+            menu_expresiones.addAction(accion)
+
+        menu.addSeparator()
+
         action_salir = QAction("Salir", self)
         action_salir.triggered.connect(self.close)
         menu.addAction(action_salir)
+
         menu.exec(event.globalPos())
 
     def closeEvent(self, event):
