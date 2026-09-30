@@ -1,12 +1,15 @@
-﻿import sys
+﻿import json
+import os
+import sys
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMenu
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QGuiApplication
 from PySide6.QtCore import Qt, QPoint, QTimer
 
 from sprites import GestorSprites
 from hotkey import WindowsHotkeyManager
 
 INTERVALO_MS = 30000  # 30 segundos entre expresiones
+CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
 
 class AyeonApp(QMainWindow):
     def __init__(self):
@@ -14,7 +17,6 @@ class AyeonApp(QMainWindow):
         self.setWindowTitle("Ayeon Companion")
         self.setFixedSize(320, 320)
 
-        # 1. Bandera y referencia del hotkey manager inicializadas antes de cualquier evento nativo
         self.hotkey_mgr = None
 
         # Configuración de ventana: frameless, transparente y siempre visible
@@ -35,6 +37,9 @@ class AyeonApp(QMainWindow):
 
         self.actualizar_sprite()
 
+        # Restaurar posición previa o colocar en esquina inferior derecha
+        self.restaurar_posicion()
+
         # Control de arrastre
         self._drag_pos = QPoint()
 
@@ -43,9 +48,41 @@ class AyeonApp(QMainWindow):
         self.timer.timeout.connect(self.siguiente_expresion)
         self.timer.start(INTERVALO_MS)
 
-        # 2. Registrar el hotkey global de forma segura
+        # Gestor de atajo global (Ctrl + Espacio)
         self.hotkey_mgr = WindowsHotkeyManager(int(self.winId()))
         self.hotkey_mgr.registrar()
+
+    def restaurar_posicion(self):
+        """Carga las coordenadas guardadas en config.json o posiciona en la esquina inferior derecha."""
+        pos_x, pos_y = None, None
+
+        if os.path.exists(CONFIG_FILE):
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    pos_x = data.get("x")
+                    pos_y = data.get("y")
+            except Exception:
+                pass
+
+        pantalla = QGuiApplication.primaryScreen().availableGeometry()
+
+        # Si no hay datos válidos o quedan fuera de pantalla, ubicar abajo a la derecha
+        if pos_x is None or pos_y is None or pos_x < 0 or pos_x > pantalla.width() - 50:
+            pos_x = pantalla.width() - self.width() - 40
+            pos_y = pantalla.height() - self.height() - 40
+
+        self.move(pos_x, pos_y)
+
+    def guardar_posicion(self):
+        """Persiste la posición actual en config.json."""
+        pos = self.pos()
+        data = {"x": pos.x(), "y": pos.y()}
+        try:
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception:
+            pass
 
     def actualizar_sprite(self):
         nombre = self.gestor_sprites.expresiones[self.indice_actual]
@@ -62,7 +99,6 @@ class AyeonApp(QMainWindow):
         self.timer.start(INTERVALO_MS)
 
     def nativeEvent(self, eventType, message):
-        # Proteger contra eventos tempranos antes de completar __init__
         if self.hotkey_mgr is not None and self.hotkey_mgr.es_evento_hotkey(int(message)):
             self.siguiente_expresion()
             return True, 0
@@ -91,6 +127,7 @@ class AyeonApp(QMainWindow):
         menu.exec(event.globalPos())
 
     def closeEvent(self, event):
+        self.guardar_posicion()
         if self.hotkey_mgr is not None:
             self.hotkey_mgr.desregistrar()
         event.accept()
