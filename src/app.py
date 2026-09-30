@@ -1,16 +1,10 @@
 ﻿import sys
-import ctypes
-from ctypes import wintypes
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMenu
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt, QPoint, QTimer
 
 from sprites import GestorSprites
-
-MOD_CONTROL = 0x0002
-VK_SPACE = 0x20
-WM_HOTKEY = 0x0312
-HOTKEY_ID = 1001
+from hotkey import WindowsHotkeyManager
 
 INTERVALO_MS = 30000  # 30 segundos entre expresiones
 
@@ -20,6 +14,9 @@ class AyeonApp(QMainWindow):
         self.setWindowTitle("Ayeon Companion")
         self.setFixedSize(320, 320)
 
+        # 1. Bandera y referencia del hotkey manager inicializadas antes de cualquier evento nativo
+        self.hotkey_mgr = None
+
         # Configuración de ventana: frameless, transparente y siempre visible
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -27,7 +24,7 @@ class AyeonApp(QMainWindow):
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # Gestor de sprites
+        # Módulos desacoplados
         self.gestor_sprites = GestorSprites()
         self.indice_actual = 0
 
@@ -41,26 +38,14 @@ class AyeonApp(QMainWindow):
         # Control de arrastre
         self._drag_pos = QPoint()
 
-        # Temporizador automático (30 segundos)
+        # Temporizador automático (30 s)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.siguiente_expresion)
         self.timer.start(INTERVALO_MS)
 
-        # Hotkey global (Ctrl + Espacio)
-        self._hotkey_registrado = False
-        self.registrar_hotkey()
-
-    def registrar_hotkey(self):
-        hwnd = int(self.winId())
-        user32 = ctypes.windll.user32
-        if user32.RegisterHotKey(hwnd, HOTKEY_ID, MOD_CONTROL, VK_SPACE):
-            self._hotkey_registrado = True
-
-    def desregistrar_hotkey(self):
-        if self._hotkey_registrado:
-            hwnd = int(self.winId())
-            ctypes.windll.user32.UnregisterHotKey(hwnd, HOTKEY_ID)
-            self._hotkey_registrado = False
+        # 2. Registrar el hotkey global de forma segura
+        self.hotkey_mgr = WindowsHotkeyManager(int(self.winId()))
+        self.hotkey_mgr.registrar()
 
     def actualizar_sprite(self):
         nombre = self.gestor_sprites.expresiones[self.indice_actual]
@@ -77,8 +62,8 @@ class AyeonApp(QMainWindow):
         self.timer.start(INTERVALO_MS)
 
     def nativeEvent(self, eventType, message):
-        msg = wintypes.MSG.from_address(int(message))
-        if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+        # Proteger contra eventos tempranos antes de completar __init__
+        if self.hotkey_mgr is not None and self.hotkey_mgr.es_evento_hotkey(int(message)):
             self.siguiente_expresion()
             return True, 0
         return super().nativeEvent(eventType, message)
@@ -106,7 +91,8 @@ class AyeonApp(QMainWindow):
         menu.exec(event.globalPos())
 
     def closeEvent(self, event):
-        self.desregistrar_hotkey()
+        if self.hotkey_mgr is not None:
+            self.hotkey_mgr.desregistrar()
         event.accept()
 
 def main():
