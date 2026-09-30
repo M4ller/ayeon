@@ -1,17 +1,18 @@
-﻿import os
-import sys
+﻿import sys
 import ctypes
 from ctypes import wintypes
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMenu
-from PySide6.QtGui import QPixmap, QAction, QPainter, QPainterPath
-from PySide6.QtCore import Qt, QPoint, QTimer, QRectF
+from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt, QPoint, QTimer
+
+from sprites import GestorSprites
 
 MOD_CONTROL = 0x0002
 VK_SPACE = 0x20
 WM_HOTKEY = 0x0312
 HOTKEY_ID = 1001
 
-INTERVALO_MS = 30000  # 30 segundos de intervalo entre expresiones
+INTERVALO_MS = 30000  # 30 segundos entre expresiones
 
 class AyeonApp(QMainWindow):
     def __init__(self):
@@ -19,22 +20,16 @@ class AyeonApp(QMainWindow):
         self.setWindowTitle("Ayeon Companion")
         self.setFixedSize(320, 320)
 
-        # Configuración de ventana: frameless, transparente y siempre al frente
+        # Configuración de ventana: frameless, transparente y siempre visible
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        self.expresiones = [
-            "feliz", "zen", "agotada",
-            "triste", "concentrada", "cafe",
-            "eureka", "enamorada", "enojada"
-        ]
+        # Gestor de sprites
+        self.gestor_sprites = GestorSprites()
         self.indice_actual = 0
-
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.assets_dir = os.path.join(self.base_dir, "assets")
 
         # Contenedor visual
         self.label = QLabel(self)
@@ -68,42 +63,17 @@ class AyeonApp(QMainWindow):
             self._hotkey_registrado = False
 
     def actualizar_sprite(self):
-        nombre_expresion = self.expresiones[self.indice_actual]
-        sprite_path = os.path.join(self.assets_dir, f"{nombre_expresion}.png")
-
-        if os.path.exists(sprite_path):
-            pixmap_original = QPixmap(sprite_path)
-            
-            scaled = pixmap_original.scaled(
-                300, 300,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation
-            )
-
-            circular = QPixmap(300, 300)
-            circular.fill(Qt.GlobalColor.transparent)
-
-            painter = QPainter(circular)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
-
-            path = QPainterPath()
-            path.addEllipse(QRectF(0, 0, 300, 300))
-            painter.setClipPath(path)
-
-            x = (300 - scaled.width()) // 2
-            y = (300 - scaled.height()) // 2
-            painter.drawPixmap(x, y, scaled)
-            painter.end()
-
-            self.label.setPixmap(circular)
+        nombre = self.gestor_sprites.expresiones[self.indice_actual]
+        pixmap = self.gestor_sprites.obtener_pixmap_circular(nombre, diametro=300)
+        if pixmap:
+            self.label.setPixmap(pixmap)
         else:
-            self.label.setText(f"Falta: {nombre_expresion}.png")
+            self.label.setText(f"Falta: {nombre}.png")
 
     def siguiente_expresion(self):
-        self.indice_actual = (self.indice_actual + 1) % len(self.expresiones)
+        total = len(self.gestor_sprites.expresiones)
+        self.indice_actual = (self.indice_actual + 1) % total
         self.actualizar_sprite()
-        # Reiniciar temporizador para evitar saltos inmediatos tras un cambio manual
         self.timer.start(INTERVALO_MS)
 
     def nativeEvent(self, eventType, message):
