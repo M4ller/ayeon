@@ -1,14 +1,14 @@
 ﻿import json
 import os
 import sys
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMenu
-from PySide6.QtGui import QAction, QGuiApplication
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMenu, QSystemTrayIcon
+from PySide6.QtGui import QAction, QGuiApplication, QIcon
 from PySide6.QtCore import Qt, QPoint, QTimer
 
 from sprites import GestorSprites
 from hotkey import WindowsHotkeyManager
 
-INTERVALO_MS = 30000  # 30 segundos entre expresiones
+INTERVALO_MS = 30000
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json")
 
 class AyeonApp(QMainWindow):
@@ -19,43 +19,75 @@ class AyeonApp(QMainWindow):
 
         self.hotkey_mgr = None
 
-        # Configuración de ventana: frameless, transparente y siempre visible
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.SubWindow
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # Módulos desacoplados
         self.gestor_sprites = GestorSprites()
         self.indice_actual = 0
 
-        # Contenedor visual
         self.label = QLabel(self)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.label.resize(320, 320)
 
         self.actualizar_sprite()
-
-        # Restaurar posición previa o colocar en esquina inferior derecha
         self.restaurar_posicion()
 
-        # Control de arrastre
         self._drag_pos = QPoint()
 
-        # Temporizador automático (30 s)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.siguiente_expresion)
         self.timer.start(INTERVALO_MS)
 
-        # Gestor de atajo global (Ctrl + Espacio)
         self.hotkey_mgr = WindowsHotkeyManager(int(self.winId()))
         self.hotkey_mgr.registrar()
 
-    def restaurar_posicion(self):
-        """Carga las coordenadas guardadas en config.json o posiciona en la esquina inferior derecha."""
-        pos_x, pos_y = None, None
+        # Configuración del System Tray
+        self.crear_tray_icon()
 
+    def crear_tray_icon(self):
+        """Inicializa el icono de la bandeja del sistema."""
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # Icono base desde los sprites existentes
+        pixmap = self.gestor_sprites.obtener_pixmap_circular(self.gestor_sprites.expresiones[0], diametro=64)
+        if pixmap:
+            self.tray_icon.setIcon(QIcon(pixmap))
+
+        tray_menu = QMenu()
+        self.accion_mostrar = QAction("Ocultar", self)
+        self.accion_mostrar.triggered.connect(self.alternar_visibilidad)
+        tray_menu.addAction(self.accion_mostrar)
+
+        tray_menu.addSeparator()
+
+        accion_salir = QAction("Salir", self)
+        accion_salir.triggered.connect(self.close)
+        tray_menu.addAction(accion_salir)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self.tray_activado)
+        self.tray_icon.show()
+
+    def alternar_visibilidad(self):
+        """Muestra u oculta la ventana según su estado actual."""
+        if self.isVisible():
+            self.hide()
+            self.accion_mostrar.setText("Mostrar")
+        else:
+            self.show()
+            self.accion_mostrar.setText("Ocultar")
+
+    def tray_activado(self, reason):
+        """Clic simple o doble en la bandeja alterna visibilidad."""
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            self.alternar_visibilidad()
+
+    def restaurar_posicion(self):
+        pos_x, pos_y = None, None
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -66,7 +98,6 @@ class AyeonApp(QMainWindow):
                 pass
 
         pantalla = QGuiApplication.primaryScreen().availableGeometry()
-
         if pos_x is None or pos_y is None or pos_x < 0 or pos_x > pantalla.width() - 50:
             pos_x = pantalla.width() - self.width() - 40
             pos_y = pantalla.height() - self.height() - 40
@@ -74,7 +105,6 @@ class AyeonApp(QMainWindow):
         self.move(pos_x, pos_y)
 
     def guardar_posicion(self):
-        """Persiste la posición actual en config.json."""
         pos = self.pos()
         data = {"x": pos.x(), "y": pos.y()}
         try:
@@ -84,7 +114,6 @@ class AyeonApp(QMainWindow):
             pass
 
     def cambiar_expresion_por_indice(self, indice: int):
-        """Cambia a una expresión específica y reinicia el temporizador."""
         if 0 <= indice < len(self.gestor_sprites.expresiones):
             self.indice_actual = indice
             self.actualizar_sprite()
@@ -126,7 +155,6 @@ class AyeonApp(QMainWindow):
     def contextMenuEvent(self, event):
         menu = QMenu(self)
 
-        # Submenú con la lista de expresiones
         menu_expresiones = menu.addMenu("Expresión")
         for i, nombre in enumerate(self.gestor_sprites.expresiones):
             accion = QAction(nombre.capitalize(), self)
@@ -137,6 +165,10 @@ class AyeonApp(QMainWindow):
 
         menu.addSeparator()
 
+        action_ocultar = QAction("Ocultar a la bandeja", self)
+        action_ocultar.triggered.connect(self.alternar_visibilidad)
+        menu.addAction(action_ocultar)
+
         action_salir = QAction("Salir", self)
         action_salir.triggered.connect(self.close)
         menu.addAction(action_salir)
@@ -145,6 +177,8 @@ class AyeonApp(QMainWindow):
 
     def closeEvent(self, event):
         self.guardar_posicion()
+        if hasattr(self, "tray_icon"):
+            self.tray_icon.hide()
         if self.hotkey_mgr is not None:
             self.hotkey_mgr.desregistrar()
         event.accept()
