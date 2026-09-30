@@ -11,13 +11,15 @@ VK_SPACE = 0x20
 WM_HOTKEY = 0x0312
 HOTKEY_ID = 1001
 
+INTERVALO_MS = 30000  # 30 segundos de intervalo entre expresiones
+
 class AyeonApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ayeon Companion")
-        self.setFixedSize(320, 320)  # Dimensiones cuadradas para un círculo perfecto
+        self.setFixedSize(320, 320)
 
-        # Configuración de ventana: frameless, transparente y al frente
+        # Configuración de ventana: frameless, transparente y siempre al frente
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
             Qt.WindowType.WindowStaysOnTopHint
@@ -41,13 +43,13 @@ class AyeonApp(QMainWindow):
 
         self.actualizar_sprite()
 
-        # Control para arrastrar la ventana
+        # Control de arrastre
         self._drag_pos = QPoint()
 
-        # Temporizador automático (5 segundos)
+        # Temporizador automático (30 segundos)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.siguiente_expresion)
-        self.timer.start(5000)
+        self.timer.start(INTERVALO_MS)
 
         # Hotkey global (Ctrl + Espacio)
         self._hotkey_registrado = False
@@ -72,14 +74,12 @@ class AyeonApp(QMainWindow):
         if os.path.exists(sprite_path):
             pixmap_original = QPixmap(sprite_path)
             
-            # Escalar manteniendo proporción
             scaled = pixmap_original.scaled(
                 300, 300,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation
             )
 
-            # Crear lienzo transparente circular de 300x300
             circular = QPixmap(300, 300)
             circular.fill(Qt.GlobalColor.transparent)
 
@@ -87,12 +87,10 @@ class AyeonApp(QMainWindow):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
 
-            # Máscara circular
             path = QPainterPath()
             path.addEllipse(QRectF(0, 0, 300, 300))
             painter.setClipPath(path)
 
-            # Centrar el sprite dentro del círculo
             x = (300 - scaled.width()) // 2
             y = (300 - scaled.height()) // 2
             painter.drawPixmap(x, y, scaled)
@@ -105,6 +103,8 @@ class AyeonApp(QMainWindow):
     def siguiente_expresion(self):
         self.indice_actual = (self.indice_actual + 1) % len(self.expresiones)
         self.actualizar_sprite()
+        # Reiniciar temporizador para evitar saltos inmediatos tras un cambio manual
+        self.timer.start(INTERVALO_MS)
 
     def nativeEvent(self, eventType, message):
         msg = wintypes.MSG.from_address(int(message))
